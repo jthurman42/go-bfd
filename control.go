@@ -1,6 +1,7 @@
 package bfd
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -128,6 +129,52 @@ func decodeBfdPacket(data []byte) (*BfdControlPacket, error) {
 	}
 
 	return packet, err
+}
+
+func (p *BfdControlPacket) Marshal() []byte {
+	var auth []byte
+	buf := bytes.NewBuffer([]uint8{})
+	flags := uint8(0)
+	length := uint8(24)
+
+	binary.Write(buf, binary.BigEndian, (p.Version<<5 | (uint8(p.Diagnostic) & 0x1f)))
+
+	if p.Poll {
+		flags |= 0x20
+	}
+	if p.Final {
+		flags |= 0x10
+	}
+	if p.ControlPlaneIndependent {
+		flags |= 0x08
+	}
+	if p.AuthPresent && (p.AuthHeader != nil) {
+		flags |= 0x04
+		auth = p.AuthHeader.Marshal()
+		length += uint8(len(auth))
+	}
+	if p.Demand {
+		flags |= 0x02
+	}
+	if p.Multipoint {
+		flags |= 0x01
+	}
+
+	binary.Write(buf, binary.BigEndian, (uint8(p.State)<<6 | flags))
+	binary.Write(buf, binary.BigEndian, p.DetectMult)
+	binary.Write(buf, binary.BigEndian, length)
+
+	binary.Write(buf, binary.BigEndian, p.MyDiscriminator)
+	binary.Write(buf, binary.BigEndian, p.YourDiscriminator)
+	binary.Write(buf, binary.BigEndian, p.DesiredMinTxInterval)
+	binary.Write(buf, binary.BigEndian, p.RequiredMinRxInterval)
+	binary.Write(buf, binary.BigEndian, p.RequiredMinEchoRxInterval)
+
+	if len(auth) > 0 {
+		binary.Write(buf, binary.BigEndian, auth)
+	}
+
+	return buf.Bytes()
 }
 
 func (p *BfdControlPacket) String() string {
