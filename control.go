@@ -3,6 +3,7 @@ package bfd
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 )
 
 type BfdState uint8
@@ -58,8 +59,8 @@ type BfdControlPacket struct {
 	Demand                    bool
 	Multipoint                bool // Must always be zero
 	DetectMult                uint8
-	LocalDiscriminator        uint32
-	RemoteDiscriminator       uint32
+	MyDiscriminator           uint32
+	YourDiscriminator         uint32
 	DesiredMinTxInterval      uint32
 	RequiredMinRxInterval     uint32
 	RequiredMinEchoRxInterval uint32
@@ -77,11 +78,11 @@ var BfdControlPacketDefaults = BfdControlPacket{
 	Demand:                    false,
 	Multipoint:                false,
 	DetectMult:                3,
-	LocalDiscriminator:        0,
-	RemoteDiscriminator:       0,
+	MyDiscriminator:           0,
+	YourDiscriminator:         0,
 	DesiredMinTxInterval:      1000000,
 	RequiredMinRxInterval:     1000000,
-	RequiredMinEchoRxInterval: 1000000,
+	RequiredMinEchoRxInterval: 0,
 	AuthHeader:                nil,
 }
 
@@ -100,10 +101,10 @@ func decodeBfdPacket(data []byte) (*BfdControlPacket, error) {
 	// bit flags
 	packet.Poll = (data[1]&0x20 != 0)
 	packet.Final = (data[1]&0x10 != 0)
-	packet.ControlPlaneIndependent = (data[1]&0x04 != 0)
-	packet.AuthPresent = (data[1]&0x02 != 0)
-	packet.Demand = (data[1]&0x01 != 0)
-
+	packet.ControlPlaneIndependent = (data[1]&0x08 != 0)
+	packet.AuthPresent = (data[1]&0x04 != 0)
+	packet.Demand = (data[1]&0x02 != 0)
+	packet.Multipoint = (data[1]&0x01 != 0)
 	packet.DetectMult = uint8(data[2])
 
 	length := uint8(data[3]) // No need to store this
@@ -112,15 +113,23 @@ func decodeBfdPacket(data []byte) (*BfdControlPacket, error) {
 		return nil, err
 	}
 
-	packet.RemoteDiscriminator = binary.BigEndian.Uint32(data[4:7])
-	packet.LocalDiscriminator = binary.BigEndian.Uint32(data[8:11])
-	packet.DesiredMinTxInterval = binary.BigEndian.Uint32(data[12:15])
-	packet.RequiredMinRxInterval = binary.BigEndian.Uint32(data[16:19])
-	packet.RequiredMinEchoRxInterval = binary.BigEndian.Uint32(data[20:23])
+	packet.MyDiscriminator = binary.BigEndian.Uint32(data[4:8])
+	packet.YourDiscriminator = binary.BigEndian.Uint32(data[8:12])
+	packet.DesiredMinTxInterval = binary.BigEndian.Uint32(data[12:16])
+	packet.RequiredMinRxInterval = binary.BigEndian.Uint32(data[16:20])
+	packet.RequiredMinEchoRxInterval = binary.BigEndian.Uint32(data[20:24])
 
 	if packet.AuthPresent {
-		packet.AuthHeader, err = decodeBfdAuthHeader(data[24:])
+		if len(data) > 24 {
+			packet.AuthHeader, err = decodeBfdAuthHeader(data[24:])
+		} else {
+			err = errors.New("Header flag set, but packet too short!")
+		}
 	}
 
 	return packet, err
+}
+
+func (p *BfdControlPacket) String() string {
+	return fmt.Sprintf("[Ver: %d]", p.Version)
 }
