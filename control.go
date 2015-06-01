@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"time"
 )
 
 type BfdState uint8
@@ -62,9 +63,9 @@ type BfdControlPacket struct {
 	DetectMult                uint8
 	MyDiscriminator           uint32
 	YourDiscriminator         uint32
-	DesiredMinTxInterval      uint32
-	RequiredMinRxInterval     uint32
-	RequiredMinEchoRxInterval uint32
+	DesiredMinTxInterval      time.Duration
+	RequiredMinRxInterval     time.Duration
+	RequiredMinEchoRxInterval time.Duration
 	AuthHeader                *BfdAuthHeader
 }
 
@@ -116,9 +117,9 @@ func decodeBfdPacket(data []byte) (*BfdControlPacket, error) {
 
 	packet.MyDiscriminator = binary.BigEndian.Uint32(data[4:8])
 	packet.YourDiscriminator = binary.BigEndian.Uint32(data[8:12])
-	packet.DesiredMinTxInterval = binary.BigEndian.Uint32(data[12:16])
-	packet.RequiredMinRxInterval = binary.BigEndian.Uint32(data[16:20])
-	packet.RequiredMinEchoRxInterval = binary.BigEndian.Uint32(data[20:24])
+	packet.DesiredMinTxInterval = time.Duration(binary.BigEndian.Uint32(data[12:16]))
+	packet.RequiredMinRxInterval = time.Duration(binary.BigEndian.Uint32(data[16:20]))
+	packet.RequiredMinEchoRxInterval = time.Duration(binary.BigEndian.Uint32(data[20:24]))
 
 	if packet.AuthPresent {
 		if len(data) > 24 {
@@ -166,9 +167,9 @@ func (p *BfdControlPacket) Marshal() []byte {
 
 	binary.Write(buf, binary.BigEndian, p.MyDiscriminator)
 	binary.Write(buf, binary.BigEndian, p.YourDiscriminator)
-	binary.Write(buf, binary.BigEndian, p.DesiredMinTxInterval)
-	binary.Write(buf, binary.BigEndian, p.RequiredMinRxInterval)
-	binary.Write(buf, binary.BigEndian, p.RequiredMinEchoRxInterval)
+	binary.Write(buf, binary.BigEndian, uint32(p.DesiredMinTxInterval))
+	binary.Write(buf, binary.BigEndian, uint32(p.RequiredMinRxInterval))
+	binary.Write(buf, binary.BigEndian, uint32(p.RequiredMinEchoRxInterval))
 
 	if len(auth) > 0 {
 		binary.Write(buf, binary.BigEndian, auth)
